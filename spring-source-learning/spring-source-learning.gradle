@@ -1,0 +1,33 @@
+plugins {
+    id 'java'
+}
+
+group 'org.springframework'
+version '5.2.3.BUILD-SNAPSHOT'
+
+sourceCompatibility = 1.8
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(":spring-core")
+    implementation project(":spring-aop")
+    implementation project(":spring-beans")
+    implementation project(":spring-context")
+    //implementation project(":spring-jdbc")
+    //implementation project(":spring-orm")
+    //implementation project(":spring-tx")
+    //implementation project(":spring-web")
+    //implementation project(":spring-webflux")
+    //implementation project(":spring-webmvc")
+    //implementation project(":spring-websocket")
+
+    //implementation project(":spring")
+    optional("junit:junit")
+    optional("org.junit.jupiter:junit-jupiter-api")
+    optional("org.testng:testng")
+    optional("org.hamcrest:hamcrest")
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
