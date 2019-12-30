@@ -594,8 +594,6 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// private boolean allowCircularReferences = true; 这是spring源码中的定义
 		//并且这个属性上面spring写了一行非常重要的注释
 		// Whether to automatically try to resolve circular references between beans
-		// 读者自行翻译，这是支持spring默认循环引用最核心的证据
-		//读者一定要讲给面试官，关于怎么讲，我后面会总结
 		boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
 				isSingletonCurrentlyInCreation(beanName));
 		//如果是单例，并且正在创建，并且是没有关闭循环引用则执行

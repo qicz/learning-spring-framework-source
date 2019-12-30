@@ -420,7 +420,6 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					//如果允许则会把创建出来的这个对象放到第二个map当中
 					//然后接着走生命周期当他走到属性填充的时候
 					//会去get一下B，因为需要填充B，也就是大家认为的自动注入
-					//这些代码下文分析，如果走完了生命周期
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
 				}
@@ -456,6 +455,8 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					afterSingletonCreation(beanName);
 				}
 				if (newSingleton) {
+					//创建一个新的bean放到singletonObject中，
+					// 把earlySingletonObject和singletonObjects中的临时对象清除
 					addSingleton(beanName, singletonObject);
 				}
 			}
