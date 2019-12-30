@@ -8,3 +8,12 @@
 - "破口式"学习，从源码级深入研究
 - 配合源码分析文章（主要在https://izcqi.com发布）
 - 周期: LTS
+
+[spring-framework original readme](spring-framework-README.md)
+
+## 破口清单
+- ApplicationContext
+- AnnotationConfigApplicationContext
+- ClassPathXmlApplicationContext
+
+[learning docs](spring-source-learning/learning-docs/README.md)
