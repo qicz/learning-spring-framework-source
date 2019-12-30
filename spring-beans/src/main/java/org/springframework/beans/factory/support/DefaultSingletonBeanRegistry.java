@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.izcqi.learning.utils.LogUtil;
 import org.springframework.beans.factory.BeanCreationException;
 import org.springframework.beans.factory.BeanCreationNotAllowedException;
 import org.springframework.beans.factory.BeanCurrentlyInCreationException;
@@ -71,18 +72,35 @@ import org.springframework.util.StringUtils;
 public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements SingletonBeanRegistry {
 
 	/** Cache of singleton objects: bean name to bean instance. */
+	/**
+	 * Spring中所有bean的缓存池，<b>一级缓存</b>
+	 */
 	private final Map<String, Object> singletonObjects = new ConcurrentHashMap<>(256);
 
 	/** Cache of singleton factories: bean name to ObjectFactory. */
+	/**
+	 * 缓存bean创建过程中的Factory，临时使用，使用完成之后，会清除已使用不需要的ObjectFactory。<br/>
+	 * <b>二级缓存</b>
+	 */
 	private final Map<String, ObjectFactory<?>> singletonFactories = new HashMap<>(16);
 
 	/** Cache of early singleton objects: bean name to bean instance. */
+	/**
+	 * <b>三级缓存</b>
+	 * 其作用： 在创建bean的过程中消耗资源较多，防止bean的重复创建。<br/>
+	 * 因为singleFactories中工厂的工作是调用多个postprocessor，消耗很大。<br/>
+	 * 尤其在循环依赖中，这样会更利于*原对象*（A依赖B，A就是原对象）的缓存。<br/>
+	 * 用完之后，再从singletonFactories移除。
+	 */
 	private final Map<String, Object> earlySingletonObjects = new HashMap<>(16);
 
 	/** Set of registered singletons, containing the bean names in registration order. */
 	private final Set<String> registeredSingletons = new LinkedHashSet<>(256);
 
 	/** Names of beans that are currently in creation. */
+	/**
+	当前正在创建的bean的缓存，避免重复创建
+	 */
 	private final Set<String> singletonsCurrentlyInCreation =
 			Collections.newSetFromMap(new ConcurrentHashMap<>(16));
 
@@ -174,13 +192,44 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 */
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
+
+		if(beanName.equals("beanA") || beanName.equals("beanB")) {
+			LogUtil.printObject("FlagA [class]=" + this.getClass()
+					+ "\n [beanName]=" + beanName
+					+ "\n[allowEarlyReference]=" + allowEarlyReference);
+		}
+
 		Object singletonObject = this.singletonObjects.get(beanName);
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			synchronized (this.singletonObjects) {
 				singletonObject = this.earlySingletonObjects.get(beanName);
+				if(beanName.equals("beanA") || beanName.equals("beanB")) {
+					LogUtil.printObject("FlagB [class]=" + this.getClass()
+							+ "\n [beanName]=" + beanName
+							+ "\n[allowEarlyReference]=" + allowEarlyReference);
+				}
 				if (singletonObject == null && allowEarlyReference) {
 					ObjectFactory<?> singletonFactory = this.singletonFactories.get(beanName);
+					/**
+					 * 如
+					 * <pre>
+					 *     Class A {
+					 *         B b;
+					 *     }
+					 *     Class B {
+					 *         A a;
+					 *     }
+					 * </pre>
+					 * 假设先注入A，那么最后下面的代码由A会调用，B不会调用。<br/>
+					 * 也就是会把A先存放到{@link DefaultSingletonBeanRegistry#singletonFactories}中。<br/>
+					 * 在B注入属性时从{@link DefaultSingletonBeanRegistry#singletonFactories}中拿出已经做好准备的A对象<br/>
+					 */
 					if (singletonFactory != null) {
+						if(beanName.equals("beanA") || beanName.equals("beanB")) {
+							LogUtil.printObject("FlagC [class]=" + this.getClass()
+									+ "\n [beanName]=" + beanName
+									+ "\n[allowEarlyReference]=" + allowEarlyReference);
+						}
 						singletonObject = singletonFactory.getObject();
 						this.earlySingletonObjects.put(beanName, singletonObject);
 						this.singletonFactories.remove(beanName);
@@ -219,6 +268,7 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					this.suppressedExceptions = new LinkedHashSet<>();
 				}
 				try {
+					//TODO 前面的属性校验完成，没有问题，现在开始这个是从singleFactory中获取singletonBean
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
 				}

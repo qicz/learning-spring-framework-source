@@ -32,6 +32,7 @@ include "spring-websocket"
 include "framework-bom"
 include "integration-tests"
 include 'spring-source-learning'
+include 'spring-source-learning-tools'
 
 rootProject.name = "spring"
 rootProject.children.each {project ->

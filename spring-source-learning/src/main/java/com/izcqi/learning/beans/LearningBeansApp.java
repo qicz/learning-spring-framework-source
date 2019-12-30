@@ -1,9 +1,12 @@
 package com.izcqi.learning.beans;
 
+import com.izcqi.learning.beans.circularreferences.BeanA;
 import com.izcqi.learning.beans.components.BeanComponent;
 import com.izcqi.learning.beans.config.BeanConfig;
 import com.izcqi.learning.utils.LogUtil;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
 
 /**
  * @author ：Qicz
@@ -15,14 +18,19 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
  */
 public class LearningBeansApp {
 
+	private static AnnotationConfigApplicationContext applicationContext = null;
+
 	public static void main(String[] args) {
-		AnnotationConfigApplicationContext applicationContext = new AnnotationConfigApplicationContext();
+		applicationContext = new AnnotationConfigApplicationContext();
 
 		applicationContext.register(BeanConfig.class);
 		applicationContext.refresh();
 
-		BeanComponent beanComponent = applicationContext.getBean(BeanComponent.class);
+		circularRef();
+	}
 
-		LogUtil.printObject(beanComponent);
+	private static void circularRef() {
+		BeanA beanA = applicationContext.getBean(BeanA.class);
+		beanA.sayHello();
 	}
 }

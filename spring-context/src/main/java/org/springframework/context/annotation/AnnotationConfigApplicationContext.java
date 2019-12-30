@@ -61,6 +61,7 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	/**
 	 * Create a new AnnotationConfigApplicationContext that needs to be populated
 	 * through {@link #register} calls and then manually {@linkplain #refresh refreshed}.
+	 * 创建一个无参的AnnotationConfigApplicationContext对象，但需要手动调用register和refresh方法。
 	 */
 	public AnnotationConfigApplicationContext() {
 		this.reader = new AnnotatedBeanDefinitionReader(this);
@@ -69,7 +70,9 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 
 	/**
 	 * Create a new AnnotationConfigApplicationContext with the given DefaultListableBeanFactory.
-	 * @param beanFactory the DefaultListableBeanFactory instance to use for this context
+	 * @param beanFactory the DefaultListableBeanFactory instance to use for this context.
+	 *
+	 * 创建一个AnnotationConfigApplicationContext对应。TODO DefaultListableBeanFactory
 	 */
 	public AnnotationConfigApplicationContext(DefaultListableBeanFactory beanFactory) {
 		super(beanFactory);
@@ -82,9 +85,19 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 	 * from the given component classes and automatically refreshing the context.
 	 * @param componentClasses one or more component classes &mdash; for example,
 	 * {@link Configuration @Configuration} classes
+	 *  使用给定的component classes创建一个AnnotationConfigApplicationContext对象，<br/>
+	 *  将构造方法中自动调用`register(componentClasses);`已经context的refresh方法。<br/>
+	 *  这个component classes通常有@Component或@Configuration注解。
 	 */
 	public AnnotationConfigApplicationContext(Class<?>... componentClasses) {
 		this();
+		/*
+		参考这个方式，我们可以在这里加入一些自定义的处理。
+		 */
+		// 自定义处理开始
+		// 1. 关闭循环依赖
+//		 this.setAllowCircularReferences(false);
+		// 自定义处理结束
 		register(componentClasses);
 		refresh();
 	}

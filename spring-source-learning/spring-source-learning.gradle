@@ -25,6 +25,7 @@ dependencies {
     //implementation project(":spring-websocket")
 
     //implementation project(":spring")
+    implementation project(":spring-source-learning-tools")
     optional("junit:junit")
     optional("org.junit.jupiter:junit-jupiter-api")
     optional("org.testng:testng")
