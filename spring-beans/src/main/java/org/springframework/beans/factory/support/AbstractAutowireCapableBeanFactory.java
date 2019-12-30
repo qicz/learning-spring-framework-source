@@ -552,11 +552,19 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 		// Instantiate the bean.
 		BeanWrapper instanceWrapper = null;
 		if (mbd.isSingleton()) {
+			//如果你bean指定需要通过factoryMethod来创建则会在这里被创建
+			//如果读者不知道上面factoryMethod那你就忽略这行代码
+			//你可以认为你的A是一个普通类，不会再这里创建
 			instanceWrapper = this.factoryBeanInstanceCache.remove(beanName);
 		}
 		if (instanceWrapper == null) {
+			//这里就通过反射创建一个对象，注意是对象不是bean
+			//这个createBeanInstance的方法过于复杂，本文不做分析
+			//以后如果有更新再来分析这个代码
+			//读者可以理解这里就是new了一个A对象
 			instanceWrapper = createBeanInstance(beanName, mbd, args);
 		}
+		//得到new出来的A，为什么需要得到呢？因为Anew出来之后存到一个对象的属性当中
 		final Object bean = instanceWrapper.getWrappedInstance();
 		Class<?> beanType = instanceWrapper.getWrappedClass();
 		if (beanType != NullBean.class) {
@@ -579,20 +587,39 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 
 		// Eagerly cache singletons to be able to resolve circular references
 		// even when triggered by lifecycle interfaces like BeanFactoryAware.
+		//重点:面试会考
+		//这里就是判断是不是支持循环引用和是否单例以及bean是否在创建过程中
+		//判断循环引用的是&& this.allowCircularReferences
+		//allowCircularReferences在spring源码当中默认就是true
+		// private boolean allowCircularReferences = true; 这是spring源码中的定义
+		//并且这个属性上面spring写了一行非常重要的注释
+		// Whether to automatically try to resolve circular references between beans
+		// 读者自行翻译，这是支持spring默认循环引用最核心的证据
+		//读者一定要讲给面试官，关于怎么讲，我后面会总结
 		boolean earlySingletonExposure = (mbd.isSingleton() && this.allowCircularReferences &&
 				isSingletonCurrentlyInCreation(beanName));
+		//如果是单例，并且正在创建，并且是没有关闭循环引用则执行
 		if (earlySingletonExposure) {
 			if (logger.isTraceEnabled()) {
 				logger.trace("Eagerly caching bean '" + beanName +
 						"' to allow for resolving potential circular references");
 			}
+			//这里就是这个创建出来的A 对象a 放到第二个map当中
+			//注意这里addSingletonFactory就是往map当中put
+			//需要说明的是他的value并不是一个a对象
+			//而是一段表达式，但是包含了这个对象的
+			//所以上文说的第二个map和第三个map的有点不同
+			//第三个map是直接放的a对象(下文会讲到第三个map的)，
+			//第二个放的是一个表达式包含了a对象
+			//为什么需要放一个表达式？下文分析吧
 			addSingletonFactory(beanName, () -> getEarlyBeanReference(beanName, mbd, bean));
 		}
 
 		// Initialize the bean instance.
 		Object exposedObject = bean;
 		try {
-			//注入属性
+			//注入属性，也就是所谓的自动注入
+			//这个代码我同一张图来说明
 			populateBean(beanName, mbd, instanceWrapper);
 			exposedObject = initializeBean(beanName, exposedObject, mbd);
 		}
@@ -957,6 +984,46 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 	 * @param mbd the merged bean definition for the bean
 	 * @param bean the raw bean instance
 	 * @return the object to expose as bean reference
+	 *
+	 * 这个方法内容比较少，但是很复杂，因为是对后置处理器的调用
+	 * 这个方法作用主要是为了来处理aop的；
+	 * 很多资料提到aop是在spring bean的生命周期里面填充属性之后的代理周期完成的
+	 * 而这个代理周期甚至是在执行生命周期回调方法之后的一个周期
+	 *
+	 * 那么问题来了？什么叫spring生命周期回调方法周期呢？
+	 * 首先spring bean生命周期和spring生命周期回调方法周期是两个概念
+	 *
+	 * spring生命周期回调方法是spring bean生命周期的一部分、或者说一个周期
+	 *
+	 * 简单理解就是spring bean的生命的某个过程会去执行spring的生命周期的回调方法
+	 *
+	 * 比如你在某个bean的方法上面写一个加@PostConstruct的方法（一般称bean初始化方法）
+	 * 那么这个方法会在spring实例化一个对象之后，填充属性之后执行这个加注解的方法
+	 *
+	 * 在执行完spring生命周期回调方法的生命周期之后才会执行代理生命周期
+	 * 在代理这个生命周期当中如果有需要会完成aop的功能
+	 * 以上是现在主流的说法
+	 *
+	 * 但是在循环引用的时候就不一样了，循环引用的情况下这个周期这里就完成了aop的代理
+	 * 这个周期严格意义上是在填充属性之前（填充属性也是一个生命周期阶段）
+	 * 填充属性的周期甚至在生命周期回调方法之前，更在代理这个周期之前了
+	 * 简单来说主流说法代理的生命周期比如在第8个周期或者第八步吧
+	 * 但是笔者这里得出的结论，如果一个bean是循环引用的则代理的周期可能在第3步就完成了
+	 * 那么为什么需要在第三步就完成呢？
+	 * 试想一下A、B两个类，现在对A类做aop处理，也就是需要对A代理
+	 * 不考虑循环引用 spring 先实例化A，然后走生命周期确实在第8个周期完成的代理
+	 *
+	 * 但是如果是循环依赖就会有问题
+	 * 比如spring 实例化A 然后发现需要注入B这个时候A还没有走到8步
+	 * 还没有完成代理，发觉需要注入B，便去创建B，创建B的时候
+	 * 发觉需要注入A，于是创建A，创建的过程中通过getSingleton
+	 * 得到了a对象，注意是对象，一个没有完成代理的对象
+	 * 然后把这个a注入给B？这样做合适吗？注入的a根本没有aop功能；显然不合适
+	 *
+	 * 因为b中注入的a需要是一个代理对象
+	 * 而这个时候a存在第二个map中；不是一个代理对象；
+	 * 于是我在第二个map中就不能单纯的存一个对象，需要存一个工厂
+	 * 这个工厂在特殊的时候需要对a对象做改变，比如这里说的代理（需要aop功能的情况）
 	 */
 	protected Object getEarlyBeanReference(String beanName, RootBeanDefinition mbd, Object bean) {
 		Object exposedObject = bean;
@@ -1026,6 +1093,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 			}
 			finally {
 				// Finished partial creation of this bean.
+				// 对象使用无参构造函数实例化完成后
 				afterSingletonCreation(beanName);
 			}
 

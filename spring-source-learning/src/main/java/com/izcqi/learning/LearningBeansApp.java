@@ -1,12 +1,8 @@
-package com.izcqi.learning.beans;
+package com.izcqi.learning;
 
-import com.izcqi.learning.beans.circularreferences.BeanA;
-import com.izcqi.learning.beans.components.BeanComponent;
-import com.izcqi.learning.beans.config.BeanConfig;
-import com.izcqi.learning.utils.LogUtil;
-import org.springframework.context.ApplicationContext;
+import com.izcqi.learning.components.circularreferences.property.PropertyInjectionBeanA;
+import com.izcqi.learning.config.BeanConfig;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import org.springframework.context.annotation.Bean;
 
 /**
  * @author ：Qicz
@@ -30,7 +26,7 @@ public class LearningBeansApp {
 	}
 
 	private static void circularRef() {
-		BeanA beanA = applicationContext.getBean(BeanA.class);
-		beanA.sayHello();
+		PropertyInjectionBeanA propertyInjectionBeanA = applicationContext.getBean(PropertyInjectionBeanA.class);
+		propertyInjectionBeanA.sayHello();
 	}
 }

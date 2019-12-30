@@ -96,7 +96,7 @@ public class AnnotationConfigApplicationContext extends GenericApplicationContex
 		 */
 		// 自定义处理开始
 		// 1. 关闭循环依赖
-//		 this.setAllowCircularReferences(false);
+		// this.setAllowCircularReferences(false);
 		// 自定义处理结束
 		register(componentClasses);
 		refresh();

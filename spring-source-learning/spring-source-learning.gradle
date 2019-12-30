@@ -16,6 +16,7 @@ dependencies {
     implementation project(":spring-aop")
     implementation project(":spring-beans")
     implementation project(":spring-context")
+
     //implementation project(":spring-jdbc")
     //implementation project(":spring-orm")
     //implementation project(":spring-tx")

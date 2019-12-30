@@ -1,5 +1,6 @@
-package com.izcqi.learning.beans.circularreferences;
+package com.izcqi.learning.components.circularreferences.property;
 
+import com.izcqi.learning.components.circularreferences.ISay;
 import com.izcqi.learning.utils.LogUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -13,16 +14,13 @@ import org.springframework.stereotype.Component;
  * @version:
  */
 @Component
-public class BeanB {
+public class PropertyInjectionBeanB implements ISay  {
 
 	@Autowired
-	private BeanA beanA;
+	private PropertyInjectionBeanA propertyInjectionBeanA;
 
-	public BeanB() {
+	public PropertyInjectionBeanB() {
 		LogUtil.printObject("init BeanB");
 	}
 
-	public void sayHello() {
-		LogUtil.printObject("BeanB Say Hello");
-	}
 }

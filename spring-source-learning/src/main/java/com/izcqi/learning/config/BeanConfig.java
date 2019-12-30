@@ -1,4 +1,4 @@
-package com.izcqi.learning.beans.config;
+package com.izcqi.learning.config;
 
 import org.springframework.context.annotation.ComponentScan;
 
@@ -10,6 +10,6 @@ import org.springframework.context.annotation.ComponentScan;
  * @modified By：
  * @version:
  */
-@ComponentScan("com.izcqi.learning.beans")
+@ComponentScan("com.izcqi.learning")
 public class BeanConfig {
 }

@@ -169,7 +169,9 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 		Assert.notNull(singletonFactory, "Singleton factory must not be null");
 		synchronized (this.singletonObjects) {
 			if (!this.singletonObjects.containsKey(beanName)) {
+				//将创建的临时对象放到singletonFactories中，注意此时还不是bean
 				this.singletonFactories.put(beanName, singletonFactory);
+				// singletonFactories 与 singletonFactories 是互换关系
 				this.earlySingletonObjects.remove(beanName);
 				this.registeredSingletons.add(beanName);
 			}
@@ -190,6 +192,103 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	 * @param allowEarlyReference whether early references should be created or not
 	 * @return the registered singleton object, or {@code null} if none found
 	 */
+	/**
+	 * 在getSingletonBean时，
+	 * 首先spring会去单例池{@link DefaultSingletonBeanRegistry#singletonObjects}去根据名字获取这个bean，单例池就是一个map
+	 * 如果对象被创建了则直接从map中拿出来并且返回
+	 * 由于循环引用需要在创建bean的过程中去获取被引用的那个类
+	 * 而被引用的这个类如果没有创建，则会调用createBean来创建这个bean
+	 * 在创建这个被引用的bean的过程中会判断这个bean的对象有没有实例化
+	 * 最后把这个对象put到单例池{@link DefaultSingletonBeanRegistry#singletonObjects}，交给Spring管理，才能算一个bean
+	 * 简而言之就是spring先new一个对象，继而对这个对象进行生命周期回调
+	 * 接着对这个对象进行属性{@link AbstractAutowireCapableBeanFactory#populateBean(String, RootBeanDefinition, BeanWrapper)}填充，也是大家说的自动注入
+	 * 然后在进行AOP判断等等；这一些操作简称----spring生命周期
+	 * 所以一个bean是一个经历了spring周期的对象，和一个对象有区别
+	 *
+	 * 循环引用时，首先spring扫描到一个需要被实例化的类A
+	 * 于是spring就去创建A；A=new A-a;new A的过程会调用getBean("a"))；
+	 *
+	 * 所谓的getBean方法--核心也就是这个getSingleton(beanName)
+	 *
+	 * 如果getA等于空；spring就会实例化A；也就是上面的new A
+	 * 但是在实例化A的时候会再次调用一下
+	 * getSingleton(String beanName, ObjectFactory<?> singletonFactory)
+	 * 笔者上面说过现在写的注释给getSingleton(beanName)
+	 * 也即是第一次调用getSingleton(beanName)
+	 * 实例化一共会调用两次getSingleton方法；但是是重载
+	 * 第二次调用getSingleton方法的时候spring会在一个set集合{@link DefaultSingletonBeanRegistry#singletonsCurrentlyInCreation}当中记录一下这个类正在被创建
+	 * 这个一定要记住，在调用完成第一次getSingleton完成之后
+	 * spring判读这个类没有创建，然后调用第二次getSingleton
+	 * 在第二次getSingleton里面记录了一下自己已经开始实例化这个类
+	 *
+	 * 需要说明的spring实例化一个对象底层用的是反射；
+	 *
+	 * spring实例化一个对象的过程非常复杂，需要推断构造方法等等；
+	 *
+	 * 这个时候对象a仅仅是一个对象，还不是一个完整的bean
+	 * 接着让这个对象去完成spring的bean的生命周期
+	 * 过程中spring会判断容器是否允许循环引用
+	 * 如果允许循环依赖（Spring默认允许循环依赖{@link AbstractAutowireCapableBeanFactory#allowCircularReferences}），
+	 * spring会把这个对象(还不是bean)临时存起来，放到一个map{@link DefaultSingletonBeanRegistry#singletonFactories}当中
+	 * 注意这个map和单例池是两个map，在spring源码中单例池的map叫做 singletonObjects
+	 * 而这个存放临时对象的map叫做singletonFactories
+	 * 当然spring还有一个存放临时对象的map叫做earlySingletonObjects
+	 * 所以一共是三个map，也可以成为三级缓存
+	 * 为什么需要三个map呢？先来了解这三个map到底都缓存了什么
+	 * 第一个map singletonObjects 存放的单例的bean
+	 * 第二个map singletonFactories 存放的临时对象(没有完整springBean生命周期的对象)
+	 * 第三个map earlySingletonObjects 存放的临时对象(没有完整springBean生命周期的对象)
+	 *
+	 * 第一个map主要为了直接缓存创建好的bean；方便程序员去getBean；很好理解
+	 * 第二个和第三个主要为了循环引用；
+	 *
+	 * 把对象a缓存到第二个map之后，会接着完善生命周期；
+	 * 当进行到对象a的属性填充的这一周期的时候，发觉a依赖了一个B类
+	 * 所以spring就会去判断这个B类到底有没有bean在容器当中
+	 * 这里的判断就是从第一个map即单例池当中去拿一个bean
+	 * 假设没有，那么spring会先去调用createBean创建这个bean
+	 *
+	 * 于是又回到和创建A一样的流程，在创建B的时候同样也会去getBean("B")；
+	 *
+	 * 第一次调用完getSingleton完成之后会调用第二次getSingleton
+	 * 第二次调用getSingleton同样会在set集合{@link DefaultSingletonBeanRegistry#singletonsCurrentlyInCreation}当中去记录B正在被创建
+	 * 在这个时候 这个set集合至少有两个记录了 A和B；
+	 * 如果为空就 b=new B()；创建一个b对象；
+	 * 创建完B的对象之后，接着完善B的生命周期
+	 * 同样也会判断是否允许循环依赖，如果允许则把对象b存到第二个map当中；
+	 * 这个时候第二个map{@link DefaultSingletonBeanRegistry#singletonFactories}当中至少有两个对象了，a和b
+	 * 接着继续生命周期；当进行到b对象的属性填充的时候发觉b需要依赖A
+	 * 于是就去容器看看A有没有创建，就是从第一个map当中去找a，
+	 * 那A是不是就是前面创建的a呢？注意那只是个对象，不是bean，
+	 * 还不在第一个map{@link DefaultSingletonBeanRegistry#singletonObjects}当中
+	 * 所以b判定A没有创建，于是就是去创建A；
+	 *
+	 * 那么又再次回到了原点了
+	 *
+	 * 创建A的过程中；首先调用getBean("a")
+	 * 上文说到getBean("a")的核心就是 getSingleton(beanName)
+	 * 上文也说了get出来a==null；但是这次却不等于空了
+	 * 这次能拿出一个a对象；注意是对象不是bean
+	 * 为什么两次不同？原因在于getSingleton(beanName)的源码
+	 * getSingleton(beanName)首先从第一个map当中获取bean
+	 * 这里就是获取a；但是获取不到；然后判断a是不是等于空
+	 * 如果等于空则在判断a是不是正在创建？什么叫做正在创建？
+	 * 就是判断a那个set集合{@link DefaultSingletonBeanRegistry#singletonsCurrentlyInCreation}当中有没有记录A；
+	 * 如果这个集合当中包含了A则直接把a对象从第二个map{@link DefaultSingletonBeanRegistry#singletonFactories}当中get出来并且返回
+	 * 所以这一次就不等于空了，于是B就可以自动注入这个a对象了
+	 * 这个时候a还只是对象，a这个对象里面依赖的B还没有注入
+	 * 当b对象注入完成a之后，把B的周期走完，存到容器当中
+	 *
+	 * 以上就完成了在A注入属性时把B的注入完成（B注入属性时用已经创建好的A对象。
+	 * 完成了A的属性注入之后，返回继续完成A的Bean生命周期，
+	 *
+	 * 当b创建完成一个bean之后，返回b(b已经是一个bean了)
+	 * 需要说明的b是一个bean意味着b已经注入完成了a；这点上面已经说明了
+	 * 由于返回了一个b，故而a也能注入b了；
+	 * 接着a对象继续完成生命周期，当走完之后a也在容器中了。
+	 *
+	 * 至此循环依赖搞定。
+	 **/
 	@Nullable
 	protected Object getSingleton(String beanName, boolean allowEarlyReference) {
 
@@ -198,10 +297,25 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					+ "\n [beanName]=" + beanName
 					+ "\n[allowEarlyReference]=" + allowEarlyReference);
 		}
-
+		/**
+		 首先spring会去第一个map当中去获取一个bean：从容器中获取。
+		 说明我们如果在容器初始化后调用getBean其实就从map中去获取一个bean
+		 假设是初始化A的时候那么这个时候肯定等于空，前文分析过这个map的意义
+		 */
 		Object singletonObject = this.singletonObjects.get(beanName);
+
+		/**
+		 我们这里的场景是初始化对象A第一次调用这个方法
+		 这段代码非常重要，首先从容器中拿，如果拿不到，再判断这个对象是不是在set集合
+		 set集合{@link #singletonsCurrentlyInCreation} ，
+		 使用 {@link #beforeSingletonCreation(String)}来加入到Set中，
+		 使用 {@link #afterSingletonCreation(String)}从Set中移除——对象创建完成后，注意不是bean创建完成走。
+		 具体看这里 {@link AbstractAutowireCapableBeanFactory#getSingletonFactoryBeanForTypeCheck(String, RootBeanDefinition)}
+		 假设现在a不在创建过程，那么直接返回一个空，第一次getSingleton返回
+		 **/
 		if (singletonObject == null && isSingletonCurrentlyInCreation(beanName)) {
 			synchronized (this.singletonObjects) {
+				//从一个对象池中拿到对象
 				singletonObject = this.earlySingletonObjects.get(beanName);
 				if(beanName.equals("beanA") || beanName.equals("beanB")) {
 					LogUtil.printObject("FlagB [class]=" + this.getClass()
@@ -230,9 +344,30 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 									+ "\n [beanName]=" + beanName
 									+ "\n[allowEarlyReference]=" + allowEarlyReference);
 						}
+						//调用表达式，说白了就是调用工厂的方法，然后改变对象(代理或者包装一些特性)
+						//我们假设对象不需要改变的情况那么返回了原对象就是a
 						singletonObject = singletonFactory.getObject();
 						this.earlySingletonObjects.put(beanName, singletonObject);
 						this.singletonFactories.remove(beanName);
+						/**
+						 * 重点:为什么要放到第三个？为什么要移除第二个？
+						 * 首先我们通过分析做一个总结:
+						 * spring首先从第一个map中拿a这个bean
+						 * 拿不到，从第三个map当中拿a这个对象
+						 * 拿不到，从第二个map拿a这个对象或者工厂
+						 * 拿到之后放到第三个map，移除第二个map里面的表达式、或者工厂
+						 * 如果对象需要改变，当改变完成之后就把他放到第三个里面
+						 * 这里的情况是b需要a而进行的步骤，试想一下以后如果还有C需要依赖a
+						 * 就不需要重复第二个map的工作了，也就是改变对象的工作了。
+						 * 因为改变完成之后的a对象已经在第三个map中了。
+						 * 如果对象不需要改变道理是一样的，也同样在第三个map取就是了；
+						 * 至于为什么需要移除第二个map里面的工厂、或者表达式就更好理解了
+						 * 他已经对a做完了改变，改变之后的对象已经在第三个map了，为了方便gc啊
+						 *
+						 *
+						 * 为什么需要改变对象？那个表达式、或者说工厂主要干什么事呢？ 那个工厂、或者表达式主要是调用了下面这个方法
+						 * {@link AbstractAutowireCapableBeanFactory#getEarlyBeanReference(String, RootBeanDefinition, Object)}
+						 */
 					}
 				}
 			}
@@ -251,6 +386,10 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 	public Object getSingleton(String beanName, ObjectFactory<?> singletonFactory) {
 		Assert.notNull(beanName, "Bean name must not be null");
 		synchronized (this.singletonObjects) {
+			//首先也是从第一个map即容器中获取
+			//再次证明如果我们在容器初始化后调用getBean其实就是从map当中获取一个bean
+			//我们这里的场景是初始化对象A第一次调用这个方法
+			//那么肯定为空
 			Object singletonObject = this.singletonObjects.get(beanName);
 			if (singletonObject == null) {
 				if (this.singletonsCurrentlyInDestruction) {
@@ -261,14 +400,27 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 				if (logger.isDebugEnabled()) {
 					logger.debug("Creating shared instance of singleton bean '" + beanName + "'");
 				}
+				/**
+				 * 注意这行代码，就是A的名字添加到set集合当中
+				 也就是笔者说的标识A正在创建过程当中
+				 这个方法比较简单我就不单独分析了，直接在这里给出
+				 singletonsCurrentlyInCreation.add就是放到set集合当中
+				 */
 				beforeSingletonCreation(beanName);
+
 				boolean newSingleton = false;
 				boolean recordSuppressedExceptions = (this.suppressedExceptions == null);
 				if (recordSuppressedExceptions) {
 					this.suppressedExceptions = new LinkedHashSet<>();
 				}
 				try {
-					//TODO 前面的属性校验完成，没有问题，现在开始这个是从singleFactory中获取singletonBean
+					//这里便是创建一个bean的入口了
+					//spring会首先实例化一个对象，然后走生命周期
+					//走生命周期的时候前面说过会判断是否允许循环依赖
+					//如果允许则会把创建出来的这个对象放到第二个map当中
+					//然后接着走生命周期当他走到属性填充的时候
+					//会去get一下B，因为需要填充B，也就是大家认为的自动注入
+					//这些代码下文分析，如果走完了生命周期
 					singletonObject = singletonFactory.getObject();
 					newSingleton = true;
 				}
@@ -292,6 +444,15 @@ public class DefaultSingletonBeanRegistry extends SimpleAliasRegistry implements
 					if (recordSuppressedExceptions) {
 						this.suppressedExceptions = null;
 					}
+					/**
+					 * 此事bean依然没有创建，仅仅只有一个对象存在。
+					 * 与 {@link AbstractAutowireCapableBeanFactory#getSingletonFactoryBeanForTypeCheck(String, RootBeanDefinition)}
+					 * 区别在于
+					 * 此处从{@link #singletonFactories}中获取对象；
+					 * 而{@link AbstractAutowireCapableBeanFactory#getSingletonFactoryBeanForTypeCheck(String, RootBeanDefinition)}
+					 * 使用无参构造创建一个对象。也是供此处使用的对象。
+					 * 因为此处是第二次调用是触发的处理。
+					 */
 					afterSingletonCreation(beanName);
 				}
 				if (newSingleton) {
